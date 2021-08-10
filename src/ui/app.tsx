@@ -9,8 +9,10 @@ import 'react-toastify/dist/ReactToastify.css';
 import { PolyjuiceHttpProvider } from '@polyjuice-provider/web3';
 import { AddressTranslator } from 'nervos-godwoken-integration';
 
-import { SimpleStorageWrapper } from '../lib/contracts/SimpleStorageWrapper';
+// import { SimpleStorageWrapper } from '../lib/contracts/SimpleStorageWrapper';
+import { RubixiWrapper } from '../lib/contracts/RubixiWrapper';
 import { CONFIG } from '../config';
+import { ContractInfoPanel } from '../components/ContractInfo';
 
 async function createWeb3() {
     // Modern dapp browsers...
@@ -41,7 +43,7 @@ async function createWeb3() {
 
 export function App() {
     const [web3, setWeb3] = useState<Web3>(null);
-    const [contract, setContract] = useState<SimpleStorageWrapper>();
+    const [contract, setContract] = useState<RubixiWrapper>();
     const [accounts, setAccounts] = useState<string[]>();
     const [l2Balance, setL2Balance] = useState<bigint>();
     const [existingContractIdInputValue, setExistingContractIdInputValue] = useState<string>();
@@ -52,7 +54,23 @@ export function App() {
     const toastId = React.useRef(null);
     const [newStoredNumberInputValue, setNewStoredNumberInputValue] = useState<
         number | undefined
-    >();
+        >();
+
+    const [currentFeePercentage, setCurrentFeePercentage] = useState({ fee: '', info: '' });
+    const [currentMultiplier, setCurrentMultiplier] = useState({ multiplier: '', info: '' });
+    const [currentPyramidBalanceApproximately, setCurrentPyramidBalanceApproximately] = useState({
+        pyramidBalance: '',
+        info: ''
+    });
+    const [
+        feesSeperateFromBalanceApproximately,
+        setFeesSeperateFromBalanceApproximately
+    ] = useState('');
+    const [totalParticipants, setTotalParticipants] = useState('');
+    const [
+        numberOfParticipantsWaitingForPayout,
+        setNumberOfParticipantsWaitingForPayout
+    ] = useState('');
 
     useEffect(() => {
         if (accounts?.[0]) {
@@ -87,7 +105,7 @@ export function App() {
     const account = accounts?.[0];
 
     async function deployContract() {
-        const _contract = new SimpleStorageWrapper(web3);
+        const _contract = new RubixiWrapper(web3);
 
         try {
             setDeployTxHash(undefined);
@@ -115,27 +133,88 @@ export function App() {
         const value = await contract.getStoredValue(account);
         toast('Successfully read latest stored value.', { type: 'success' });
 
-        setStoredValue(value);
+        console.log(value);
+        setCurrentFeePercentage(value.currentFeePercentage);
+        setCurrentMultiplier(value.currentMultiplier);
+        setCurrentPyramidBalanceApproximately(value.currentPyramidBalanceApproximately);
+        setFeesSeperateFromBalanceApproximately(value.feesSeperateFromBalanceApproximately);
+        setTotalParticipants(value.totalParticipants);
+        setNumberOfParticipantsWaitingForPayout(value.numberOfParticipantsWaitingForPayout);
     }
 
     async function setExistingContractAddress(contractAddress: string) {
-        const _contract = new SimpleStorageWrapper(web3);
+        const _contract = new RubixiWrapper(web3);
         _contract.useDeployed(contractAddress.trim());
 
         setContract(_contract);
         setStoredValue(undefined);
     }
 
-    async function setNewStoredValue() {
+    // async function setNewStoredValue() {
+    //     try {
+    //         setTransactionInProgress(true);
+    //         await contract.setStoredValue(newStoredNumberInputValue, account);
+    //         toast(
+    //             'Successfully set latest stored value. You can refresh the read value now manually.',
+    //             { type: 'success' }
+    //         );
+    //     } catch (error) {
+    //         console.error(error);
+    //         toast.error(
+    //             'There was an error sending your transaction. Please check developer console.'
+    //         );
+    //     } finally {
+    //         setTransactionInProgress(false);
+    //     }
+    // }
+
+    async function setNewFeePercentage(value: number) {
         try {
             setTransactionInProgress(true);
-            await contract.setStoredValue(newStoredNumberInputValue, account);
+            await contract.changeFeePercentage(value, account);
             toast(
-                'Successfully set latest stored value. You can refresh the read value now manually.',
+                'Successfully set new fee percentage. You can refresh the read value now manually.',
                 { type: 'success' }
             );
-        } catch (error) {
-            console.error(error);
+        } catch (e) {
+            console.error(e);
+            toast.error(
+                'There was an error sending your transaction. Please check developer console.'
+            );
+        } finally {
+            setTransactionInProgress(false);
+        }
+    }
+
+    async function dynamicPyramid() {
+        try {
+            setTransactionInProgress(true);
+            await contract.dynamicPyramid(account);
+            toast(
+                'Successfully set you as a new owner. You can refresh the read value now manually.',
+                { type: 'success' }
+            );
+        } catch (e) {
+            console.error(e);
+            toast.error(
+                'There was an error sending your transaction. Please check developer console.'
+            );
+        } finally {
+            setTransactionInProgress(false);
+        }
+    }
+
+    async function participate(value: string) {
+        try {
+            const valueNum = parseInt(value, 10);
+            setTransactionInProgress(true);
+            await contract.participate(valueNum, account);
+            toast(
+                'Successfully set you as a new participant. You can refresh the read value now manually.',
+                { type: 'success' }
+            );
+        } catch (e) {
+            console.error(e);
             toast.error(
                 'There was an error sending your transaction. Please check developer console.'
             );
@@ -183,11 +262,10 @@ export function App() {
             <br />
             <hr />
             <p>
-                The button below will deploy a SimpleStorage smart contract where you can store a
-                number value. By default the initial stored value is equal to 123 (you can change
-                that in the Solidity smart contract). After the contract is deployed you can either
-                read stored value from smart contract or set a new one. You can do that using the
-                interface below.
+                The button below will deploy a Rubixi smart contract where you can play a pyramid
+                game. After the contract is deployed you can either participate in the game or try
+                to claim the contract ownership and change some settings or collect all fees
+                (comming soon).
             </p>
             <button onClick={deployContract} disabled={!l2Balance}>
                 Deploy contract
@@ -211,21 +289,22 @@ export function App() {
             {storedValue ? <>&nbsp;&nbsp;Stored value: {storedValue.toString()}</> : null}
             <br />
             <br />
-            <input
-                type="number"
-                onChange={e => setNewStoredNumberInputValue(parseInt(e.target.value, 10))}
-            />
-            <button onClick={setNewStoredValue} disabled={!contract}>
-                Set new stored value
-            </button>
-            <br />
-            <br />
-            <br />
-            <br />
             <hr />
             The contract is deployed on Nervos Layer 2 - Godwoken + Polyjuice. After each
             transaction you might need to wait up to 120 seconds for the status to be reflected.
             <ToastContainer />
+            <hr />
+            <ContractInfoPanel
+                fee={currentFeePercentage}
+                multiplier={currentMultiplier}
+                balance={currentPyramidBalanceApproximately}
+                feesSeparete={feesSeperateFromBalanceApproximately}
+                totalParticipants={totalParticipants}
+                waitingParticipants={numberOfParticipantsWaitingForPayout}
+                setNewFeePercentage={setNewFeePercentage}
+                dynamicPyramid={dynamicPyramid}
+                participate={participate}
+            />
         </div>
     );
 }
