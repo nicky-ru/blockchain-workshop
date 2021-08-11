@@ -18,3 +18,8 @@ body {
         transform: rotateX(360deg);
     }
 }
+
+#l2deposit-address {
+    word-wrap: break-word;
+    max-width: 500px;
+}
