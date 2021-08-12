@@ -3,11 +3,8 @@ import * as RubixiJSON from '../../../build/contracts/Rubixi.json';
 import { Rubixi } from '../../types/Rubixi';
 
 const DEFAULT_SEND_OPTIONS = {
-    gas: 6000000
+    gas: 60000000
 };
-
-// 100000000000
-// 10000000000000000000
 
 export class RubixiWrapper {
     web3: Web3;
@@ -69,15 +66,6 @@ export class RubixiWrapper {
             ...DEFAULT_SEND_OPTIONS,
             from: fromAddress,
             value
-        });
-
-        return tx;
-    }
-
-    async collectFees(fromAddress: string) {
-        const tx = await this.contract.methods.init().send({
-            ...DEFAULT_SEND_OPTIONS,
-            from: fromAddress
         });
 
         return tx;

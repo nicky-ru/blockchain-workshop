@@ -6,6 +6,7 @@ export const ContractInfoPanel = (props: any) => {
 
     return (
         <>
+            <i>Coming soon: play with ckETH!</i>
             <h2>Player</h2>
             <div>
                 <div className={'input-control'}>
@@ -21,7 +22,7 @@ export const ContractInfoPanel = (props: any) => {
                             props.participate(participationValue);
                         }}
                     >
-                        Participate
+                        Play
                     </button>
                 </div>
             </div>

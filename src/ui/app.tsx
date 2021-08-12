@@ -11,7 +11,7 @@ import { AddressTranslator } from 'nervos-godwoken-integration';
 
 // import { SimpleStorageWrapper } from '../lib/contracts/SimpleStorageWrapper';
 import { RubixiWrapper } from '../lib/contracts/RubixiWrapper';
-import {SUDTBalanceGetter} from "../lib/contracts/SUDTBalanceGetter";
+import { SUDTBalanceGetter } from '../lib/contracts/SUDTBalanceGetter';
 import { CONFIG } from '../config';
 import { ContractInfoPanel } from '../components/ContractInfo';
 
@@ -45,6 +45,7 @@ async function createWeb3() {
 export function App() {
     const [web3, setWeb3] = useState<Web3>(null);
     const [contract, setContract] = useState<RubixiWrapper>();
+    const [sudtProxy, setSudtProxy] = useState<SUDTBalanceGetter>();
     const [accounts, setAccounts] = useState<string[]>();
     const [l2Balance, setL2Balance] = useState<bigint>();
     const [sudtBalance, setSudtBalance] = useState<number>();
@@ -143,11 +144,9 @@ export function App() {
     }
 
     async function getSUDTBalance() {
-        const _balanceGetter = new SUDTBalanceGetter();
-
         try {
-            const balance = await _balanceGetter.getBalance(web3, polyjuiceAddress, accounts[0]);
-            setSudtBalance(balance);
+            const balance = await sudtProxy.getBalance(polyjuiceAddress, accounts[0]);
+            setSudtBalance(parseFloat(balance));
         } catch (e) {
             console.log(e);
         }
@@ -157,7 +156,6 @@ export function App() {
         const value = await contract.getStoredValue(account);
         toast('Successfully read latest stored value.', { type: 'success' });
 
-        console.log(value);
         setCurrentFeePercentage(value.currentFeePercentage);
         setCurrentMultiplier(value.currentMultiplier);
         setCurrentPyramidBalanceApproximately(value.currentPyramidBalanceApproximately);
@@ -210,11 +208,12 @@ export function App() {
         }
     }
 
-    async function participate(value: string) {
+    async function participate(value: number) {
         try {
-            const valueNum = parseInt(value, 10);
+            // const valueNum = parseInt(value, 10);
             setTransactionInProgress(true);
-            await contract.participate(valueNum, account);
+            await contract.participate(value, account);
+            // await contract.participate(valueNum, polyjuiceAddress);
             toast(
                 'Successfully set you as a new participant. You can refresh the read value now manually.',
                 { type: 'success' }
@@ -228,6 +227,22 @@ export function App() {
             setTransactionInProgress(false);
         }
     }
+
+    useEffect(() => {
+        if (web3) {
+            const sudt_proxi = new SUDTBalanceGetter(web3);
+            setSudtProxy(sudt_proxi);
+        }
+    }, [web3]);
+
+    useEffect(() => {
+        if (sudtProxy && polyjuiceAddress && accounts?.[0]) {
+            getSUDTBalance();
+            setInterval(() => {
+                getSUDTBalance();
+            }, 5000);
+        }
+    }, [sudtProxy, polyjuiceAddress, accounts]);
 
     useEffect(() => {
         if (web3) {
@@ -258,23 +273,66 @@ export function App() {
             Your Polyjuice address: <b>{polyjuiceAddress || ' - '}</b>
             <br />
             <br />
+            Deployed contract address: <b>{contract?.address || '-'}</b> <br />
+            <br />
+            Deploy transaction hash: <b>{deployTxHash || '-'}</b>
+            <br />
+            <br />
             Nervos Layer 2 balance:{' '}
             <b>{l2Balance ? (l2Balance / 10n ** 8n).toString() : <LoadingIndicator />} CKB</b>
             <br />
-            <br />
-            ckETH Balance: <b>{sudtBalance ? (sudtBalance / 10 ** 20).toString() : '-'} ckETH</b>
+            <hr />
+            <p>
+                In the future you will be able to deposit your ETH in order to participate. Be ready
+                to play, use Force Bridge to deposit ckETH in advance to be the first and highest in
+                this pyramid!
+            </p>
+            <h4>Instructions:</h4>
+            <ol>
+                <li>
+                    Click Get my Deposit Address button and copy your Layer 2 Deposit Address on
+                    Layer 1
+                </li>
+                <li>
+                    Click Top up ckETH and wrap some your ETH to ckETH (recepient should be your
+                    address from the previous step)
+                </li>
+                <li>
+                    Wait for transaction propagate in the network. Go back to the Dapp page and you
+                    will see your balance updated!
+                </li>
+            </ol>
+            ckETH Balance:{' '}
+            <b>{sudtBalance ? (sudtBalance / 10 ** 18).toString() : <LoadingIndicator />} ckETH</b>
             <br />
             <br />
             Your Layer 2 Deposit Address on Layer 1:{' '}
             <p id={'l2deposit-address'}>
-                <b>
-                    {l2DepositAddress || '-'}
-                </b>
+                <b>{l2DepositAddress || '-'}</b>
             </p>
             <br />
-            Deployed contract address: <b>{contract?.address || '-'}</b> <br />
-            Deploy transaction hash: <b>{deployTxHash || '-'}</b>
-            <br />
+            <button
+                onClick={() => {
+                    getL2DepositAddress();
+                }}
+            >
+                Get my Deposit Address
+            </button>
+            <button
+                onClick={() => {
+                    getSUDTBalance();
+                }}
+            >
+                Refresh my ckETH balance
+            </button>
+            <button
+                onClick={() => {
+                    window.open('https://force-bridge-test.ckbapp.dev/bridge/Ethereum/Nervos');
+                }}
+            >
+                Top up ckETH
+            </button>
+            <ToastContainer />
             <hr />
             <p>
                 The button below will deploy a Rubixi smart contract where you can play a pyramid
@@ -299,30 +357,11 @@ export function App() {
             <br />
             <br />
             <button onClick={getStoredValue} disabled={!contract}>
-                Get stored values
+                Get contract state
             </button>
             {storedValue ? <>&nbsp;&nbsp;Stored value: {storedValue.toString()}</> : null}
             <br />
             <br />
-            <hr />
-            <button
-                onClick={() => {
-                    getL2DepositAddress();
-                }}
-            >
-                Get my Deposit Address
-            </button>
-            <button
-                onClick={() => {
-                    getSUDTBalance();
-                }}
-            >
-                Get my SUDT balance
-            </button>
-            <hr />
-            The contract is deployed on Nervos Layer 2 - Godwoken + Polyjuice. After each
-            transaction you might need to wait up to 120 seconds for the status to be reflected.
-            <ToastContainer />
             <hr />
             <ContractInfoPanel
                 fee={currentFeePercentage}
